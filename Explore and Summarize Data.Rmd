@@ -1,0 +1,234 @@
+Exploratory Data Analysis: Kickstarter Projects 
+========================================================
+#### by Ryan Gee
+
+```{r  echo=FALSE, global_options}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+#install.packages("tidyverse")
+library(ggplot2)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+#library(kableExtra)
+```
+
+```{r echo=FALSE, Load_the_Data}
+ks <- read.csv('data/ks-projects-201801.csv', fileEncoding='latin1')
+```
+
+# The Dataset and Pre-Processing
+Kickstarter is a crowdfunding platform that allows a global community to back 
+and fund people's creative projects and ideas. Kickstarter was launched in 2009.
+In 2018, 15 billion people have pledged $4 Billion dollars, and 150 thousand 
+projects have been successfully funded.
+
+This dataset was downloaded from Kaggle
+(https://www.kaggle.com/kemical/kickstarter-projects). According to Kaggle this
+data was consumed in January 2018.
+
+
+```{r echo=FALSE, Univariate_Plots}
+sprintf('There are %s rows and %s columns in this Kickstarter Data set.',
+        dim(ks)[1], dim(ks)[2])
+```
+
+The columns and their data type are shown below:
+
+```{r echo=FALSE}
+sapply(ks, class)
+```
+
+Here are the top 3 rows of the Kickstarter Dataset:
+
+```{r echo=FALSE, results = 'asis'}
+kable(head(ks,3), caption = 'Head of Kickstarter Dataset')
+```
+
+It looks like there are two similar columns: one is usd.pledged and the other
+is usd_pledged_real. After taking a look at the data overview tab on Kaggle,
+I have decided to use only the usd.pledged.real column since this column was
+converted using the more accurate Fixer.io API. Similarly, I will be using
+usd_goal_real instead of goal. Finally, I will drop the currency column since
+everything has been converted to USD.
+
+```{r echo=FALSE}
+ks <- ks[,!(names(ks) %in% c('usd.pledged', 'goal', 'currency'))]
+```
+
+Next, I need to check if there are any NaNs in the dataset:
+```{r}
+sprintf('There are not any NaNs in the dataset: %s', !any(is.na(ks)))
+```
+
+To make life easier in the future, I will convert the deadline and launched
+columns to dates and datetimes using the lubridate library:
+
+```{r}
+ks$launched <- ymd_hms(ks$launched)
+ks$deadline <- ymd(ks$deadline)
+sprintf('Launched and Deadlines have been converted to Dates: %s',
+        sapply(ks$deadline[1], is.Date))
+```
+
+Here is the first few rows of the cleaned up dataset:
+
+```{r results = 'asis'}
+kable(head(ks,3), caption = 'Cleaned Kickstarter Dataset')
+```
+
+
+# Univariate Plots Section
+
+> **Tip**: In this section, you should perform some preliminary exploration of
+your dataset. Run some summaries of the data and create univariate plots to
+understand the structure of the individual variables in your dataset. Don't
+forget to add a comment after each plot or closely-related group of plots!
+There should be multiple code chunks and text sections; the first one below is
+just to help you get started.
+
+To get a feel of what the Kickstarter dataset looks like, I'll create some quick
+Histograms that count the number of projects for some of our categorical data.
+
+I'll first take a look at the **number of projects per Main Category**.
+
+```{r}
+sprintf('There are %s different Main Categories.', nlevels(ks$main_category))
+ggplot(aes(x=main_category), data = ks)+
+  geom_histogram(stat='count') +
+  ggtitle('Number of Projects by Main Categories') +
+  theme(axis.text.x=element_text(size=8, angle=90)) +
+  xlab('')
+```
+
+Film and Video projects are clearly the most popular main category, while
+Dance is the least popular. Let's take a look at the projects by sub-category.
+
+```{r}
+sprintf('There are %s different Sub Categories.', nlevels(ks$category))
+ggplot(aes(x=category), data = ks)+
+  geom_histogram(stat='count') +
+  ggtitle('Number of Projects by Sub Categories') +
+  theme(axis.text.x=element_text(size=8, angle=90)) +
+  xlab('')
+```
+
+# Univariate Analysis
+
+> **Tip**: Now that you've completed your univariate explorations, it's time to
+reflect on and summarize what you've found. Use the questions below to help you
+gather your observations and add your own if you have other thoughts!
+
+### What is the structure of your dataset?
+
+### What is/are the main feature(s) of interest in your dataset?
+
+### What other features in the dataset do you think will help support your \
+investigation into your feature(s) of interest?
+
+### Did you create any new variables from existing variables in the dataset?
+
+### Of the features you investigated, were there any unusual distributions? \
+Did you perform any operations on the data to tidy, adjust, or change the form \
+of the data? If so, why did you do this?
+
+
+# Bivariate Plots Section
+
+> **Tip**: Based on what you saw in the univariate plots, what relationships
+between variables might be interesting to look at in this section? Don't limit
+yourself to relationships between a main output feature and one of the
+supporting variables. Try to look at relationships between supporting variables
+as well.
+
+```{r echo=FALSE, Bivariate_Plots}
+
+```
+
+# Bivariate Analysis
+
+> **Tip**: As before, summarize what you found in your bivariate explorations
+here. Use the questions below to guide your discussion.
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+### Did you observe any interesting relationships between the other features \
+(not the main feature(s) of interest)?
+
+### What was the strongest relationship you found?
+
+
+# Multivariate Plots Section
+
+> **Tip**: Now it's time to put everything together. Based on what you found in
+the bivariate plots section, create a few multivariate plots to investigate
+more complex interactions between variables. Make sure that the plots that you
+create here are justified by the plots you explored in the previous section. If
+you plan on creating any mathematical models, this is the section where you
+will do that.
+
+```{r echo=FALSE, Multivariate_Plots}
+
+```
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+### Were there any interesting or surprising interactions between features?
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the \
+strengths and limitations of your model.
+
+------
+
+# Final Plots and Summary
+
+> **Tip**: You've done a lot of exploration and have built up an understanding
+of the structure of and relationships between the variables in your dataset.
+Here, you will select three plots from all of your previous exploration to
+present here as a summary of some of your most interesting findings. Make sure
+that you have refined your selected plots for good titling, axis labels (with
+units), and good aesthetic choices (e.g. color, transparency). After each plot,
+make sure you justify why you chose each plot by describing what it shows.
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+
+```
+
+### Description One
+
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+
+```
+
+### Description Two
+
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+
+```
+
+### Description Three
+
+------
+
+# Reflection
+
+> **Tip**: Here's the final step! Reflect on the exploration you performed and
+the insights you found. What were some of the struggles that you went through?
+What went well? What was surprising? Make sure you include an insight into
+future work that could be done with the dataset.
+
+> **Tip**: Don't forget to remove this, and the other **Tip** sections before
+saving your final work and knitting the final report!
