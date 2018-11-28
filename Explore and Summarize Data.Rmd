@@ -1,6 +1,6 @@
 Exploratory Data Analysis: Kickstarter Projects 
 ========================================================
-###### by Ryan Gee
+##### by Ryan Gee
 
 ```{r  echo=FALSE, global_options}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
@@ -892,14 +892,6 @@ Category" chart shows this clearly.
 
 # Final Plots and Summary
 
-> **Tip**: You've done a lot of exploration and have built up an understanding
-of the structure of and relationships between the variables in your dataset.
-Here, you will select three plots from all of your previous exploration to
-present here as a summary of some of your most interesting findings. Make sure
-that you have refined your selected plots for good titling, axis labels (with
-units), and good aesthetic choices (e.g. color, transparency). After each plot,
-make sure you justify why you chose each plot by describing what it shows.
-
 ### Plot One
 ```{r echo=FALSE, Plot_One}
 levels(amounts.long$amount_type) <- c(levels(amounts.long$amount_type), 
@@ -1027,7 +1019,6 @@ have a higher average goal amount. I also decided to remove the default
 grey background, which to me does not add any value to the chart. Finally, to
 remove clutter from the chart I decided to decrease the number of breaks in the 
 y-axis so that it only shows 0%, 50%, and 100%.
-------
 
 # Reflection
 
