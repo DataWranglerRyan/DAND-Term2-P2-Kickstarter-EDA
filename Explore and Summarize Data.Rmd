@@ -1,6 +1,6 @@
 Exploratory Data Analysis: Kickstarter Projects 
 ========================================================
-#### by Ryan Gee
+###### by Ryan Gee
 
 ```{r  echo=FALSE, global_options}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
@@ -12,6 +12,9 @@ library(ggplot2)
 library(tidyverse)
 library(lubridate)
 library(knitr)
+library(reshape2)
+library(GGally)
+library(gridExtra)
 #library(kableExtra)
 ```
 
@@ -31,7 +34,7 @@ data was consumed in January 2018.
 
 
 ```{r echo=FALSE, Univariate_Plots}
-sprintf('There are %s rows and %s columns in this Kickstarter Data set.',
+sprintf('There are %s rows and %s fields in the Original Kickstarter Data set.',
         dim(ks)[1], dim(ks)[2])
 ```
 
@@ -73,21 +76,57 @@ sprintf('Launched and Deadlines have been converted to Dates: %s',
         sapply(ks$deadline[1], is.Date))
 ```
 
+I will also be using the launched and deadline fields to create a new field
+called project_length, which represents the number of days that the project
+was live.
+
+```{r}
+ks$project_length <-floor(difftime(ks$deadline, ks$launched, units = 'days'))
+```
+
+Finally, I will add a field called pledge_per_backer, which divides a project's
+pledge amount by the number of backers.
+
+```{r}
+ks$pledge_per_backer <-ks$usd_pledged_real/ks$backers
+ks$pledge_per_backer[is.na(ks$pledge_per_backer)] <- 0
+```
+
+
 Here is the first few rows of the cleaned up dataset:
+```{r}
+sprintf('There are %s rows and %s fields in the Cleaned Kickstarter Data set.',
+        dim(ks)[1], dim(ks)[2])
+```
+
 
 ```{r results = 'asis'}
 kable(head(ks,3), caption = 'Cleaned Kickstarter Dataset')
 ```
 
+Here are some quick descriptions of some of the columns:
+
+  *  main_category: Broad umbrella categories
+  *  category: more detailed sub-categories
+  *  state: Whether or not the project is successful, unsuccessful, in progress, etc 
+  *  backers: Number of people that have pledged money to the project
+  *  usd_pledged_real: Accurately converted Pledge amounts to USD
+  *  usd_goal_real: Accurately converted Goal amounts to USD
+  *  project_length: The differene in days between deadline and launched dates
 
 # Univariate Plots Section
 
-> **Tip**: In this section, you should perform some preliminary exploration of
-your dataset. Run some summaries of the data and create univariate plots to
-understand the structure of the individual variables in your dataset. Don't
-forget to add a comment after each plot or closely-related group of plots!
-There should be multiple code chunks and text sections; the first one below is
-just to help you get started.
+Univariate Analysis is the analysis of one variable. For example, getting the 
+counts per project category. The following section will focus on this type of
+analysis. **However, at times the process of Exploratory Data Analysis may lead
+me to do a little bit of bivariate analysis.**
+
+Let's start by getting some summary stats on the columns.
+
+```{r}
+summary(ks)
+```
+
 
 To get a feel of what the Kickstarter dataset looks like, I'll create some quick
 Histograms that count the number of projects for some of our categorical data.
@@ -95,85 +134,725 @@ Histograms that count the number of projects for some of our categorical data.
 I'll first take a look at the **number of projects per Main Category**.
 
 ```{r}
+order_main_categories <- ks %>%
+  group_by(main_category) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count))
+```
+
+
+```{r}
 sprintf('There are %s different Main Categories.', nlevels(ks$main_category))
-ggplot(aes(x=main_category), data = ks)+
-  geom_histogram(stat='count') +
+ggplot(aes(x=reorder(main_category, -count), y=count), 
+       data = order_main_categories)+
+  geom_bar(stat='identity') +
   ggtitle('Number of Projects by Main Categories') +
   theme(axis.text.x=element_text(size=8, angle=90)) +
   xlab('')
 ```
 
 Film and Video projects are clearly the most popular main category, while
-Dance is the least popular. Let's take a look at the projects by sub-category.
+Dance is the least popular. Let's take a look at the projects by category.
 
 ```{r}
-sprintf('There are %s different Sub Categories.', nlevels(ks$category))
-ggplot(aes(x=category), data = ks)+
-  geom_histogram(stat='count') +
-  ggtitle('Number of Projects by Sub Categories') +
+sprintf('There are %s different Categories.', nlevels(ks$category))
+```
+
+Since there are so many categories, let's just show the top 15 in the chart
+
+```{r}
+order_categories <- ks %>%
+  group_by(category) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count)) %>%
+  head(15)
+```
+
+```{r}
+ggplot(aes(x=reorder(category, -count), y=count), data = order_categories)+
+  geom_bar(stat='identity') +
+  ggtitle('Number of Projects by Categories') +
   theme(axis.text.x=element_text(size=8, angle=90)) +
   xlab('')
 ```
 
+It looks like Product Design, Documentary, and Music are the top three
+categories. Let's get an idea of the distribution between the different states
+of a project.
+
+```{r}
+ggplot(aes(x=state), data=ks) +
+  geom_histogram(stat='count')
+```
+
+There are 6 different states that a project can be in. As expected, 'failed' and
+'successful' are the most common. I'm curious which of the Main Categories have 
+the greatest success rates.
+
+```{r}
+ks.state_rate <- ks %>% 
+  count(main_category, state, sort = TRUE) %>%
+  arrange(main_category) %>%
+  group_by(main_category) %>%
+  add_tally(n) %>%
+  arrange(main_category)
+
+colnames(ks.state_rate)[3:4] <- c('state.count','main_cat.count')
+ks.state_rate$state_rate <- 
+  signif(ks.state_rate$state.count / ks.state_rate$main_cat.count,4)
+ks.success_rate <- subset(ks.state_rate, state == 'successful')
+ks.fail_rate <- subset(ks.state_rate, state == 'failed')
+```
+
+
+```{r}
+ggplot(aes(x=reorder(main_category, -state_rate), y=state_rate),
+       data = ks.success_rate)+
+  geom_bar(stat='identity') +
+  ggtitle('Success Rate by Main Categories') +
+  theme(axis.text.x=element_text(size=8, angle=90)) +
+  xlab('') +
+  ylab('Success Rate')
+```
+
+One thing I find interesting is that the 3 Main Categories with the highest 
+success rates are some of the more uncommon types of projects. For example, 
+Dance has the highest success rate but the smallest number of projects. Let's 
+look at the other side of things and see which Main Categories have the highest 
+failure rate.
+
+```{r}
+ggplot(aes(x=reorder(main_category, -state_rate), y=state_rate),
+       data = ks.fail_rate)+
+  geom_bar(stat='identity') +
+  ggtitle('Failure Rate by Main Categories') +
+  theme(axis.text.x=element_text(size=8, angle=90)) +
+  xlab('') +
+  ylab('Success Rate')
+```
+ 
+ Journalism, Food, and Crafts have the highest failure rates. Let's take a look 
+ at the number of backers per Main category.
+ 
+```{r}
+sum_backers <- aggregate(list(sum.backers=ks$backers), 
+                         by=list(main.category=ks$main_category), FUN=sum)
+
+ggplot(aes(x=reorder(main.category, -sum.backers), y=sum.backers),
+       data = sum_backers) +
+  geom_bar(stat='identity') +
+  ggtitle('Number of Backers by Main Categories') +
+  theme(axis.text.x=element_text(size=8, angle=90)) +
+  xlab('') +
+  ylab('Backers')
+```
+ 
+Games have the most number of backers, so you would think that Games also have a
+high success rate. However, they are in the middle of the pack when it comes to
+success rates. This could be because of multiple reasons. One possible reason is
+because Game backers do not pledge as much money, so even though they have many
+backers they may not reach the monetary goal. Let's see if this is true.
+
+```{r}
+ks.avg_pledge <- ks %>%
+  group_by(main.category = main_category) %>%
+  summarise(total.pledge = sum(usd_pledged_real), 
+            sum.backers = sum(backers),
+            avg.goal = mean(usd_goal_real),
+            avg.pledge.backer = sum(usd_pledged_real)/sum(backers),
+            highlight = FALSE) %>%
+  arrange(desc(avg.pledge.backer))
+
+ks.avg_pledge[ks.avg_pledge$main.category=='Games',]$highlight <- TRUE
+
+ggplot(aes(x=reorder(main.category, -avg.pledge.backer), y=avg.pledge.backer, 
+           fill=highlight), data=ks.avg_pledge) +
+  geom_bar(stat='identity') +
+  scale_fill_manual(values=c("grey35", "deepskyblue3")) +
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  xlab('') +
+  ylab('Average Pledge per Backer (USD)') +
+  ggtitle('Avg Pledge per Backer by Main Categories')
+```
+
+ The average pledge per backer for Games is about $65, which is the 4th lowest
+ of all the Main Categories. I also suspect that games (especially video games)
+ cost alot too make, so this may be why the success rate for Games is lower as
+ well. Let's see what the average goal amount is for each Main Category.
+ 
+```{r}
+ggplot(aes(x=reorder(main.category, -avg.goal), y=avg.goal, fill=highlight),
+       data=ks.avg_pledge) +
+  geom_bar(stat='identity') +
+  scale_fill_manual(values=c("grey35", "deepskyblue3")) +
+  ggtitle('Avg Goal Amount by Main Categories') +
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  xlab('') +
+  ylab('Average Goal Amount (USD)')
+```
+ 
+ Games have the 5th highest Average Goal amount. This combined with the fact
+ that Games also have a low average pledge amount per backer may be the reason
+ why Games have a mediocre success rate relative to the high number of backers
+ that they get.
+ 
+ Next, I want to take a look at the distribution of Pledge and Goal Amounts
+ for all the projects.
+ 
+```{r}
+ggplot(aes(x = usd_pledged_real), data = ks)+
+  geom_histogram(binwidth = 1000) +
+  scale_x_continuous(limits = c(0, 40000))
+```
+ 
+The distribution of Pledge amount for the projects are heavily right-skewed. There
+are around 50,000 projects that have been pledged less than $1000 and then there
+are outliers that have been pledged alot more money. Let's try a log transformation
+so we can see both sides of the spectrum.
+
+```{r}
+ggplot(aes(x = usd_pledged_real+1), data = ks)+
+  geom_histogram() +
+  scale_x_log10()
+```
+
+After doing a log transformation, you can see that the distribution is bimodal.
+The first spike represents all the projects with low Pledge amounts. There is
+another mode for higher pledge amounts. Let's take a look at Goal amounts.
+
+```{r}
+ggplot(aes(x = usd_goal_real), data = ks)+
+  geom_histogram(binwidth = 1000) +
+  scale_x_continuous(limits = c(0, 51000))
+```
+
+Similar to the Pledge amount distribution, the Goal amount distribution is
+right-skewed. However, you can see a pattern where there is a spike in $50,000
+increments. This is probably because people enter Goal amounts in these types
+of increments. Let's do a log transformation and plot on the same chart as the
+Pledge distributions.
+
+```{r}
+# convert to long format
+amounts.long <- melt(ks[,c('usd_goal_real', 'usd_pledged_real')], 
+                     variable.name = 'amount_type', 
+                     value.name = 'amount')
+
+ggplot(aes(x=amount+1, fill=amount_type), data = amounts.long) +
+  geom_histogram(alpha=0.7, position='identity') +
+  scale_x_log10() +
+  scale_fill_manual(values=c("grey35", "deepskyblue3")) +
+  ggtitle('Log Distribution of Goal and Pledge Amounts') +
+  theme(legend.title = element_blank())+
+  xlab('Log(Amount)')
+```
+
+One interesting thing from this histogram is that you can see that alot of the
+Pledge amounts are to the left of the Goal amounts, which means many of the
+projects probably failed to meet their goal. This aligns with what some of 
+the previous charts showed as well.
+
+Lastly, some other factors that I wanted to look at was spatial and temporal distribution.
+Let's take quick look at which countries had the most projects.
+
+```{r}
+ggplot(aes(x=country),data=ks) +
+  geom_bar(stat='count') +
+  ggtitle('Number of Projects by Country') +
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  xlab('') +
+  ylab('Number of Projects')
+```
+
+It's clear that US, Great Britain, and Canada have the most Kickstarter
+Projects. Let's quickly look at the number of projects over time.
+
+```{r}
+ggplot(aes(x=year(launched)),data=ks) +
+  geom_line(stat='count') +
+  scale_x_continuous(limits = c(2009, 2018)) +
+  ggtitle('Number of Projects Over Time') +
+  xlab('Year Launched') +
+  ylab('Number of Projects')
+```
+
+Since its beginning in 2009, Kickstarter projects increased and peaked in 2015.
+In 2016-2017, the number of projects slightly decreased. It's important to note
+that this dataset was collected in January of 2018, which explains why there are
+no projects for 2018. Let's see how many projects were created by project length.
+
+```{r}
+ks$project_length.bucket <- cut(as.numeric(ks$project_length, units = 'days'),
+                                breaks = c(0,15,30,45,60,75,90,105,120))
+ggplot(aes(x = project_length.bucket),
+       data = subset(ks, !is.na(ks$project_length.bucket)))+
+  geom_histogram(stat = 'count')+
+  ggtitle('Number of Projects by Project Length') +
+  xlab('Project Length Bucket (days)') +
+  ylab('Number of Projects')
+
+```
+
+The most common project length is 15-30 days by far. The longest project length
+in this data set is 91 days.
+
 # Univariate Analysis
 
-> **Tip**: Now that you've completed your univariate explorations, it's time to
-reflect on and summarize what you've found. Use the questions below to help you
-gather your observations and add your own if you have other thoughts!
-
 ### What is the structure of your dataset?
+There are 378,661 Kickstarter projects in this dataset and 14 features.
+(id, name, category, main_category, deadline, launched, pledged, state,
+backers, country, usd_pledge_real, usd_goal_real, project_length, and
+pledge_per_backer).
+
+There are 15 main categories and 159 categories. Also, there are 6 different
+states that a project can be in.
+
+Here are some other observations:
+
+  * The median number of backers is 12 and the max is 219,382.
+  * The median pledge amount is $624 and the max is $20,338,986.
+  * The median goal amount is $5,500 and the max is $166,361,391.
+  * 197719 projects have failed and 133956 have succeeded.
+  * Most projects were in US, GB, and CA.
 
 ### What is/are the main feature(s) of interest in your dataset?
+The feature that I'm most interested in is state. More specifically, I'm
+interested in figuring out what type of projects and specifications are
+more likely to succeed (aka Success Rate).
 
 ### What other features in the dataset do you think will help support your \
 investigation into your feature(s) of interest?
+I'm going to take a look at category, main_category, project_length, backers,
+and pledge_per_backer to see if those variables contribute to a project's success
+rates.
 
 ### Did you create any new variables from existing variables in the dataset?
+Yes, I created the project_length and pledge_per_backer variables.
 
 ### Of the features you investigated, were there any unusual distributions? \
 Did you perform any operations on the data to tidy, adjust, or change the form \
 of the data? If so, why did you do this?
-
+When I visualized the distribution of pledge and goal amounts they were both
+heavily right-skewed, which makes sense because most projects will have lower
+pledge and goal amounts. But as expected, there are a few big-budget projects
+that will need more funding, which creates that right-skewed tail. In an attempt
+to normalize the distribution, I did a log transformation. The results showed that
+the pledge amount distribution was bimodal and the goal amount distribution was
+very close to normally distributed.
 
 # Bivariate Plots Section
 
-> **Tip**: Based on what you saw in the univariate plots, what relationships
-between variables might be interesting to look at in this section? Don't limit
-yourself to relationships between a main output feature and one of the
-supporting variables. Try to look at relationships between supporting variables
-as well.
+It looks like the dataset has some projects where there are 0 backers, but has
+a pledge amount. This creates erroneous data for the pledge_per_backer field,
+since you cannot divide a number by 0. For the sake of this analysis, I'll
+remove these rows from the data set. Note: There are 3,082 of these projects.
 
-```{r echo=FALSE, Bivariate_Plots}
-
+```{r}
+ks_bi <- subset(ks, !(ks$backers == 0)&(ks$usd_pledged_real>0))
 ```
 
-# Bivariate Analysis
+I will also be creating a new field called success_state, where a successful
+state is 1, an failed state is 0, and any other state is -1. Then I'll remove
+all the -1 success_states and only leave projects that failed or succeeded.
 
-> **Tip**: As before, summarize what you found in your bivariate explorations
-here. Use the questions below to guide your discussion.
+```{r}
+ks_bi <- mutate(ks_bi, success_state = ifelse(state == 'successful', 1,
+                                     ifelse(state == 'failed', 0, -1)))
+ks_bi <- subset(ks_bi, success_state >= 0)
+```
+
+```{r}
+ks_bi$project_length <- as.numeric(ks_bi$project_length, units = 'days')
+```
+
+Now that we cleaned up some of the data for this bivariate analysis, let's take
+a look and see if any of the numerical variables are correlated with each other.
+
+```{r echo=FALSE, Bivariate_Plots}
+cor(ks_bi[,c('backers','usd_pledged_real','usd_goal_real','pledge_per_backer',
+             'project_length')])
+```
+
+There is a strong positive correlation between backers and pledged amount. This
+makes sense because with an increase in backers you can expect an increase in
+the amount of money pledged. None of the other numerical variables appear to have
+a correlation. Let's see the relationship between backers and pledge amount.
+
+```{r}
+ggplot(aes(x=backers, y=usd_pledged_real), data = ks_bi) +
+  geom_point(alpha=.2)+
+  xlim(0, quantile(ks_bi$backers, .99)) +
+  ylim(0, quantile(ks_bi$usd_pledged_real, .99)) +
+  geom_smooth( method = 'lm', color = 'red')
+```
+
+There is alot of data in this dataset, so to help with overplotting, I changed 
+the transparency to 20%. I added a linear regression to visualize the positive 
+correlation between backers and pledge amount.
+
+Since the other numerical variables are not correlated with each other, let's
+take a look at some relationships between categorical data and numerical data.
+We'll start by seeing if there is a relationship between success rate and
+project length.
+
+```{r}
+ks_bi.state_pct <- ks_bi %>%
+  group_by(project_length.bucket, state) %>%
+  summarize(count = n()) %>%
+  mutate(percentage = count/sum(count))
+```
+
+
+```{r}
+ggplot(aes(x = project_length.bucket, y = percentage, fill = state),
+       data = subset(ks_bi.state_pct, 
+                     !is.na(ks_bi.state_pct$project_length.bucket)))+
+  geom_bar(stat = 'identity', alpha = .9)+
+  scale_fill_manual(values=c("grey35", "deepskyblue3")) +
+  ggtitle('Success Rate by Project Length') +
+  xlab('Project Length Bucket (days)') +
+  ylab('')+
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  geom_text(aes(label=paste0(round(percentage*100),"%")),
+            position=position_stack(vjust=0.5))
+```
+
+Projects that have a length of 0-15 days have the highest success rate (60%) and
+then slowly declines, until another spike at 60-75 day projects. Next, I'm curious
+if there is a relationship between backers and success rate. I predict that
+projects with more backers are also more likely to succeed. Let's see if that
+is true.
+
+```{r}
+ks_bi$backers_grp <- cut(ks_bi$backers, 
+                         breaks=c(0, 3, 10, 25, 50, 100, 200, 500, 219382))
+
+ks_bi.backer_state_pct <- ks_bi %>%
+  group_by(backers_grp, state) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count/sum(count))
+
+ggplot(aes(x = backers_grp, y = percentage, fill = state),
+       data = ks_bi.backer_state_pct)+
+  geom_bar(stat = 'identity', alpha = .9)+
+  scale_fill_manual(values=c("grey35", "deepskyblue3")) +
+  ggtitle('Success Rate by Number of Backers') +
+  xlab('Number of Backers') +
+  ylab('')+
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  geom_text(aes(label=paste0(round(percentage*100),"%")),
+            position=position_stack(vjust=0.5), size=3)
+```
+
+It looks like my prediction was correct: as the number of backers increases so
+does the success rate of the project, which makes intuitive sense. Let's see how
+the average pledge per backer relates to success rate.
+
+```{r}
+summary(ks_bi$pledge_per_backer)
+```
+
+
+```{r}
+ks_bi$pledge_backer_grp <- cut(ks_bi$pledge_per_backer, 
+                         breaks=c(0, 10, 25, 50, 100, 150, 200, 500,1000,10000))
+
+ks_bi.pledge_backer_state_pct <- ks_bi %>%
+  group_by(pledge_backer_grp, state) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count/sum(count))
+
+ggplot(aes(x = pledge_backer_grp, y = percentage, fill = state),
+       data = ks_bi.pledge_backer_state_pct)+
+  geom_bar(stat = 'identity', alpha = .9)+
+  scale_fill_manual(values=c("grey35", "deepskyblue3")) +
+  ggtitle('Success Rate by Average Pledge per Backer') +
+  xlab('Average Pledge per Backer (USD)') +
+  ylab('')+
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  geom_text(aes(label=paste0(round(percentage*100),"%")),
+            position=position_stack(vjust=0.5), size=3)
+```
+
+Interestingly, the success rate peaked at around an average pledge amount
+of $100-200 and then started to dip after that. I would think that as the
+average pledge per backer increased, so would the success rate, but this is
+not the case. I wonder if this is because the number of backers for the higher
+average pledge per backer groups is lower. Let's take a quick look.
+
+```{r}
+ggplot(aes(x=pledge_backer_grp, y=backers), data=ks_bi) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(0,500)) +
+  xlab('Average Pledge per Backer (USD)') +
+  ylab('Number of Backers')
+```
+
+```{r}
+ks_bi %>%
+  group_by(pledge_backer_grp) %>%
+  summarise(median_number_backers = median(backers))
+```
+
+You can see that the median number of backers for the higher average pledge
+groups (i.e (200,500], (500,1e+03], etc) start to dip, which is why the success
+rate dips at these groups as well. Basically, even though the average pledge price
+is high in these groups, often there are not enough backers to push these projects
+to success.
+
+Next, I would like to look at the success rate over time.
+
+```{r}
+ks_bi.launch_state_pct <- ks_bi %>%
+  group_by(launched = year(launched), state) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count/sum(count)) %>%
+  filter(state == 'successful')
+
+ggplot(aes(x = launched, y = percentage),
+       data = ks_bi.launch_state_pct)+
+  geom_line(stat='identity') +
+  scale_x_continuous(limits = c(2009, 2018)) +
+  ggtitle('Success Rate Over Time') +
+  xlab('Year Launched') +
+  ylab('Success Rate')
+```
+
+From 2009 the success rate of Kickstarter projects have been declining and hit
+rock bottom in 2015. Interestingly, 2015 is also the year that Kickstarter had
+the most projects. After 2015, the number of projects dipped, but the success
+rate of projects started increasing.
+
+Up until this point we've been measuring projects by their success rates.
+However, not all successful projects are equally successful; some projects may
+exceed their goal by a greater margin than others. In order to explore this, we
+need to create a new variable called pledge_goal_ratio, which divides the pledge
+amount by the goal amount. We will then take a look at the main categories that
+have the most projects with a pledge/goal ratio of 10 or more and a goal of 
+$1,000 or more. This eliminates projects that have a goal of 1 dollar and a very
+high pledge/goal ratio.
+
+```{r}
+ks_bi$pledge_goal_ratio <- 
+  ((ks_bi$usd_pledged_real)/ks_bi$usd_goal_real)
+
+ks_bi.ratio_counts <- ks_bi %>%
+  filter((usd_goal_real > 1000) & (pledge_goal_ratio >= 10)) %>%
+  group_by(main.category = main_category) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+ggplot(aes(x=reorder(main.category, -count), y=count), data=ks_bi.ratio_counts)+
+  geom_bar(stat='identity') +
+  ggtitle('Main Categories with the Most Projects with a Pledge Goal Ratio over 10') +
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  xlab('') +
+  ylab('Number of Projects')
+```
+
+The main categories with the most number of projects with a high pledge/goal
+ratio are Design and Games. Let's drill down and see which categories from these
+top two main categories have the highest ratio.
+```{r}
+ks_bi.category_ratio_counts <- ks_bi %>%
+  filter((usd_goal_real > 1000) & (pledge_goal_ratio >= 10) 
+         & (main_category %in% c('Design', 'Games'))) %>%
+  group_by(category, main_category) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count))
+
+design_ratio <- ggplot(aes(x=reorder(category, -count), y=count),
+       data=subset(ks_bi.category_ratio_counts, main_category == 'Design'))+
+  geom_bar(stat='identity') +
+  ggtitle('Design Categories with the Most Projects with a Pledge Goal Ratio over 10') +
+  xlab('') +
+  ylab('Number of Projects')
+
+game_ratio <- ggplot(aes(x=reorder(category, -count), y=count),
+       data=subset(ks_bi.category_ratio_counts, main_category == 'Games'))+
+  geom_bar(stat='identity') +
+  ggtitle('Game Categories with the Most Projects with a Pledge Goal Ratio over 10') +
+  xlab('') +
+  ylab('Number of Projects')
+
+grid.arrange(design_ratio, game_ratio)
+```
+
+It looks like Product Design and Tabletop Games have the most projects with a
+high pledge/goal ratio, by a longshot.
+
+# Bivariate Analysis
 
 ### Talk about some of the relationships you observed in this part of the \
 investigation. How did the feature(s) of interest vary with other features in \
 the dataset?
 
+The feature I was most interested in was Success Rate. I found that as the number
+of backers increases, so does the success rate of a project, which makes intuitive
+sense. I also found that the projects that have the highest rate of success have 
+an average pledge per backer of $100-200. Projects that have an average pledge per
+backer in this range normally have the most backers as well.
+
 ### Did you observe any interesting relationships between the other features \
 (not the main feature(s) of interest)?
 
+After producing a correlation matrix, I found that the number of backers has a
+strong positive correlation with the pledge amount of a project. This makes sense
+since you would expect more money to be pledged with the more people that back a
+project.
+
+Another feature I explored was a project's pledge to goal ratio, which measures
+how far a project surpassed or failed their goal. I found that Design and Game 
+main categories were the most common projects to surpass their goal with a ratio 
+of 10 or more. Further more, Product Design and Tabletop Games were the 
+categories that surpassed their goal with a ratio of 10 or more.
+
 ### What was the strongest relationship you found?
 
+The strongest relationship I found was the positive correlation between backers
+and pledge amount. Also, the number of backers and success rate was another
+strong relationship.
 
 # Multivariate Plots Section
 
-> **Tip**: Now it's time to put everything together. Based on what you found in
-the bivariate plots section, create a few multivariate plots to investigate
-more complex interactions between variables. Make sure that the plots that you
-create here are justified by the plots you explored in the previous section. If
-you plan on creating any mathematical models, this is the section where you
-will do that.
-
 ```{r echo=FALSE, Multivariate_Plots}
-
+ks_multi <- data.frame(ks_bi)
 ```
+
+Similar to the bivariate analysis, let's start off by looking at success rate
+by project length. However, this time let's add one more variable: main_category.
+We can see if success rates and project length have different relationships with
+each other for certain main cateogries.
+
+```{r}
+ks_multi.mc_pl_success <- ks_multi %>%
+  group_by(main_category,project_length.bucket, state) %>%
+  summarize(count = n()) %>%
+  mutate(percentage = count/sum(count)) %>%
+  filter((state == 'successful') & (!is.na(project_length.bucket)))
+
+ggplot(aes(x=project_length.bucket, y=percentage, color=main_category)
+       , data = ks_multi.mc_pl_success) +
+  geom_line(aes(group=1)) +
+  geom_point(size=1, shape=21, fill="white") +
+  facet_wrap(~main_category)+
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  ggtitle('Success Rate by Project Length and Main Category') +
+  xlab('Project Length (days)') +
+  ylab('Success Rate')
+```
+
+It looks like the majority of the main categories have a negative relationship
+between Success Rate and Project Length. However, there are some exceptions:
+Food, Journalism, Photography, and Technology, do not seem to have a negative
+relationship.
+
+Note, that the Theatre projects seem to spike at a Project Length of 90 to 105
+days, but this is because the sample size of this bin is only 1, so this point
+can be slightly misleading.
+
+Let's take a look at Success rate by number of backers and main categories.
+
+```{r}
+ks_multi.mc_backer_success <- ks_multi %>%
+  group_by(main_category,backers_grp, state) %>%
+  summarize(count = n()) %>%
+  mutate(percentage = count/sum(count)) %>%
+  filter((state == 'successful') & (!is.na(backers_grp)))
+
+ks_multi.mc_avg_goal <- ks_multi %>%
+  group_by(main_category) %>%
+  summarize(avg_goal = mean(usd_goal_real))
+
+ks_multi.mc_backer_success <-
+  merge(ks_multi.mc_backer_success, ks_multi.mc_avg_goal, by='main_category' )
+
+ks_multi.mc_backer_success <-
+  mutate(ks_multi.mc_backer_success,
+       main_category = reorder(main_category, avg_goal))
+
+ggplot(aes(x=backers_grp, y=percentage, color=main_category)
+       , data = ks_multi.mc_backer_success) +
+  geom_line(aes(group=1)) +
+  geom_point(size=1, shape=21, fill="white") +
+  facet_wrap(~main_category)+
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  labs(title = "Success Rate by Number of Backers and Main Category",
+       subtitle = "Main Categories sorted by Avg Goal Amount (Asecending)" ) +
+  theme(plot.subtitle=element_text(size=10, face="italic", color="gray45")) +
+  xlab('Number of Backers') +
+  ylab('Success Rate')
+```
+
+First off, you can clearly see that all the main categories have a positive
+relationship between success rate and number of backers. Another, less
+obvious, observation is that some main category's success rates do not 
+increase as quickly with an increase to the number of backers. For example,
+Design, Games, and Technology do not have a success rate above 50% until
+around 50-100 backers. On the other hand, Dance, Crafts, and Comics all
+exceed a success rate of 50% by at least 25-50 backers. One hypothesis I
+had was that main categories that had a lower average goal amount would
+require less backers to be successful. To help visualize this, I ordered
+the main category panels by their average goal amount in ascending order.
+You can see that Design, Games, and Technology projects all have a
+relatively high average goal amount.
+
+Let's take a look at Success rate over time by main categories.
+
+```{r}
+ks_multi.mc_launch_state_pct <- ks_bi %>%
+  group_by(main_category, launched = year(launched), state) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count/sum(count)) %>%
+  filter(state == 'successful')
+
+ggplot(aes(x = launched, y = percentage, color=main_category),
+       data = ks_multi.mc_launch_state_pct)+
+  geom_line(stat='identity') +
+  geom_point(size=1, shape=21, fill="white") +
+  facet_wrap(~main_category)+
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  scale_x_continuous(limits = c(2009, 2018)) +
+  ggtitle('Success Rate Over Time by Main Category') +
+  xlab('Year Launched') +
+  ylab('Success Rate')
+```
+
+Here are some quick observations I noticed from this chart:
+
+  * Art, Crafts, Dance, Food, Music, Journalism, and Technology all took a
+  dip in success rate around 2014 and 2015.
+  
+  * Games, Comics, and Design have increased in success rate from 2016 and
+  on.
+  
+  * Dance and Theater, in general, have always had a pretty high success
+  rate at above 60%. While Fashion has never had a success rate of over
+  50%.
+
+In the bivariate analysis section, we took a look at the number of High 
+Pledge/Goal ratio projects by main category. Let's now add another variable,
+time, and see if that gives us further insight.
+
+```{r}
+ggplot(aes(x=year(launched), fill = main_category), 
+       data=subset(ks_multi, (usd_goal_real > 1000) &
+                     (pledge_goal_ratio >= 10))) +
+  geom_bar(alpha=.6) +
+  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  facet_wrap(~main_category) +
+  ggtitle('High Pledge/Goal Ratio Projects Over Time by Main Category') +
+  xlab('Year Launched') +
+  ylab('Number of Projects')
+```
+
+After adding time to the analysis, we can see that Kickstarter projects
+rarely exceeded a Pledge/Goal ratio over 10 when the company first started
+in 2009. Starting around 2012 the number of these projects started to increase
+for multiple main categories. The most notable main category types are
+Design, Games, and Technology. The number of high ratio Design and Games 
+projects have been steadily increasing since 2011.
 
 # Multivariate Analysis
 
@@ -181,10 +860,33 @@ will do that.
 investigation. Were there features that strengthened each other in terms of \
 looking at your feature(s) of interest?
 
+For this multivariate analysis, I built off of the charts that I created for 
+the bivariate analysis and added a new variable. In most of these cases, that
+new variable was main_category. This allowed me to look at how different variables
+affect success rate for each of the main categories. Here are some of the 
+observations that I made:
+
+  * Most main categories show that there is a negative relationship between
+  success rate and project length. However, some main categories like Food
+  and journalism do not show this negative relationship.
+  
+  * All main categories show that as the number of backers increase so does
+  the success rate. Interestingly, though, some categories (like design and
+  technology) show a slower increase in success rate when the number of backers
+  increase.
+  
+  * Food, Journalism, Photography, and Technology have been declining in
+  success rate since 2009.
+  
+  * The number of high pledge/goal ratio projects for Design, Games, and
+  Technology have been increasing in the past 5 years.
+
 ### Were there any interesting or surprising interactions between features?
 
-### OPTIONAL: Did you create any models with your dataset? Discuss the \
-strengths and limitations of your model.
+I think the most interesting interaction that I discovered was that, in general,
+main categories that have a higher average goal amount need more backers to
+increase their success rate. The "Success Rate by Number of Backers and Main
+Category" chart shows this clearly.
 
 ------
 
@@ -200,35 +902,178 @@ make sure you justify why you chose each plot by describing what it shows.
 
 ### Plot One
 ```{r echo=FALSE, Plot_One}
+levels(amounts.long$amount_type) <- c(levels(amounts.long$amount_type), 
+                                      'Goal Amount', 'Pledged Amount')
+amounts.long$amount_type[amounts.long$amount_type == 'usd_goal_real'] <-
+  'Goal Amount'
+amounts.long$amount_type[amounts.long$amount_type == 'usd_pledged_real'] <-
+  'Pledged Amount'
 
+ggplot(aes(x=amount+1, fill=amount_type), data = amounts.long) +
+  geom_histogram(alpha=0.6, position='identity') +
+  scale_x_log10() +
+  scale_fill_manual(values=c("palegreen4", "steelblue")) +
+  ggtitle('Distribution of Goal and Pledge Amounts for Kickstarters Projects') +
+  theme_bw()+
+  theme(legend.title = element_blank(), 
+        legend.position = 'bottom',
+        legend.text = element_text(margin = margin(r = 10, unit = "pt")),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        plot.title = element_text(face="bold", family = 'Helvetica'),
+        axis.line = element_line(colour = "lightgrey"),
+        axis.title = element_text(size = 9),
+        axis.text = element_text(size = 8)
+        )+
+  guides(fill=guide_legend(
+                 keywidth=0.1,
+                 keyheight=0.1,
+                 default.unit="inch")
+      ) +
+  xlab('Log(Amount (USD))') +
+  ylab('Number of Projects')
 ```
 
 ### Description One
-
+I chose to revamp this plot because it effectively tells multiple stories. It
+shows the distribution for Goal and Pledge Amounts and it also shows that many
+of the projects have a lower pledge amount than the goal amount. To emphasize
+the last ladder point, I lowered the opacity of the bars to 60%. I also removed
+some of the grid lines and background colors to bring the histogram bars into
+focus. Lastly, I moved the legend to the bottom of the figure to free up some
+space for the chart.
 
 ### Plot Two
 ```{r echo=FALSE, Plot_Two}
+ks_bi$backers_grp <- cut(ks_bi$backers, 
+                         breaks=c(0, 3, 10, 25, 50, 100, 200, 500, 220000),
+                         dig.lab=9)
 
+ks_bi.backer_state_pct <- ks_bi %>%
+  group_by(backers_grp, state) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count/sum(count))
+
+ggplot(aes(x = backers_grp, y = percentage, fill = state),
+       data = ks_bi.backer_state_pct)+
+  geom_bar(stat = 'identity', alpha = .8)+
+  scale_fill_manual(values=c("lightcoral", "palegreen4")) +
+  ggtitle('Success Rate increases as number of Backers increase') +
+  xlab('Number of Backers') +
+  ylab('')+
+  theme(axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = 'bottom',
+        legend.title = element_blank(),
+        legend.text = element_text(margin = margin(r = 10, unit = "pt")),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        plot.title = element_text(face="bold", family = 'Helvetica', hjust= .5),
+        axis.line.y = element_blank(),
+        axis.line.x = element_line(colour = "grey"),
+        axis.title  = element_text(size = 9)
+        ) +
+  guides(fill=guide_legend(
+                 keywidth=0.1,
+                 keyheight=0.1,
+                 default.unit="inch")
+      ) +
+  geom_text(aes(label=paste0(round(percentage*100),"%")),
+            position=position_stack(vjust=0.5), size=3)
 ```
 
 ### Description Two
 
+This plot does a good job of showing the relationship between the number of
+backers and the success/failure rate. I changed the title of the chart to make
+the key insight/takeaway clear. Next, I chose to color the success rate green,
+since this is a common color associated with success. Likewise, I chose red for
+failure for similar reasons. I moved the legend to the bottom of the figure to
+make room for the actual stacked bar chart. Finally, I rounded the last grouping
+to 220,000 so that it is cleaner to read.
 
 ### Plot Three
 ```{r echo=FALSE, Plot_Three}
-
+ggplot(aes(x=backers_grp, y=percentage, color=main_category)
+       , data = ks_multi.mc_backer_success) +
+  geom_line(aes(group=1)) +
+  geom_point(size=1, shape=21, fill="white") +
+  facet_wrap(~main_category)+
+  theme(axis.text.x=element_text(size=8, angle=90),
+        panel.grid.major = element_line(color = 'grey95'),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        strip.background =element_rect(fill="grey90"),
+        plot.title = element_text(face="bold", family = 'Helvetica', hjust= .5),
+        legend.position="none") +
+  labs(title = "Success Rate by Number of Backers and Main Category",
+       subtitle = "Main Categories sorted by Avg Goal Amount (Asecending)" ) +
+  theme(plot.subtitle=element_text(size=10, face="italic", color="gray45",
+                                   hjust= .5)) +
+  scale_y_continuous(labels = scales::percent, breaks = c(0,1,.5)) +
+  xlab('Number of Backers') +
+  ylab('Success Rate')
 ```
 
 ### Description Three
 
+I already made some key tweaks to this chart during my multivariate analysis.
+For example, I ordered the Main Category Panels by their Average Goal Amount
+in ascending order. I chose to do this in order to reveal that the lines with
+the flatter slopes (i.e the categories with a slower increase in success rate
+relative to an increase in number of backers) are normally the categories that
+have a higher average goal amount. I also decided to remove the default
+grey background, which to me does not add any value to the chart. Finally, to
+remove clutter from the chart I decided to decrease the number of breaks in the 
+y-axis so that it only shows 0%, 50%, and 100%.
 ------
 
 # Reflection
 
-> **Tip**: Here's the final step! Reflect on the exploration you performed and
-the insights you found. What were some of the struggles that you went through?
-What went well? What was surprising? Make sure you include an insight into
-future work that could be done with the dataset.
+This exploration started even before writing a single line of R code. I wanted
+to choose a dataset that I was interested in and one that was fairly clean.
+After spending almost an hour searching the internet for a dataset that inspired
+me, I finally found this Kickstarter Dataset.
 
-> **Tip**: Don't forget to remove this, and the other **Tip** sections before
-saving your final work and knitting the final report!
+I spent some time making sure the dataset was clean and adding columns that would
+come in handy for future analysis, but luckily this dataset was pretty easy to
+work with. Once I started the univariate analysis I found simple insights like:
+the median number of backers for a project is 12, the product design category 
+had the most projects, and more projects failed than succeeded. The ladder insight
+naturally led me to start doing some bivariate analysis like figuring out which
+project category had the best success rates, but I tried to stick to doing just
+univariate analysis for that section.
+
+One interesting insight that I discovered through the univariate analysis section
+was that Game projects had the most backers of any type of project, but their
+success rate was just middle of the pack. I found that this may be because the
+average pledged amount for games is relatively low, while the average goal amount
+for these projects are relatively high. Basically, game projects have alot of
+backers that contribute a small amount of money, and unfortunately many times
+the goal amount is too high for the project to succeed.
+
+Next, I did some bivariate analysis and focused mainly on how different variables
+relate to the success rate of a project. By far, the strongest relationship that
+I found was that as the number of backers for a project increases so does the
+likelihood of success. Another interesting insight I found was that projects that
+had an average pledge per backer of $100-200 had the highest success rates. If the
+average pledge per backer was higher than that, often times the number of backers
+would be too low to push the project to success.
+
+Lastly, during my multivariate analysis I chose to focus on insights that I
+looked at during the bivariate analysis while adding main category as a new
+variable. I think the most interesting observation from this analysis was that
+for **every** main category, as the number of backers increased so did the success
+rate. However, some main categories' success rates increased more slowly as the
+number of backers increased. I found that this may be correlated to the average
+goal amount for the specific main category.
+
+In the future I would like to create some predictive models that could forecast
+how likely a project is to succeed based on the category, backers, goal amount.
+This analysis could be even more insightful if we had demographic data about the
+backers for each project. For example, if we had the ages of the backers, we
+could answer something like "Which age group has the highest average pledge
+amount for Game projects?" This would help the owner of the project determine
+which age group they should target to raise the most amount of money.
+
