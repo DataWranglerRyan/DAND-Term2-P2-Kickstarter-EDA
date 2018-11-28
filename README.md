@@ -24,3 +24,12 @@ library(reshape2)
 library(GGally)
 library(gridExtra)
 
+## Resources
+http://sape.inf.usi.ch/quick-reference/ggplot2/colour
+http://felixfan.github.io/ggplot2-remove-grid-background-margin/
+https://www.kaggle.com/andrewjmah/kickstarter-exploratory-data-analysis-with-r/report
+https://stat.ethz.ch/R-manual/R-devel/library/stats/html/reorder.factor.html
+http://www.sthda.com/english/wiki/ggplot2-axis-ticks-a-guide-to-customize-tick-marks-and-labels
+https://rawgit.com/rstudio/cheatsheets/master/lubridate.pdf
+https://haozhu233.github.io/kableExtra/awesome_table_in_html.html
+
