@@ -3,7 +3,9 @@ Exploratory Data Analysis: Kickstarter Projects
 ##### by Ryan Gee
 
 ```{r  echo=FALSE, global_options}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(fig.width=9,fig.height=5,fig.path='Figs/',
+                      fig.align='center',tidy=TRUE,
+                      echo=FALSE,warning=FALSE,message=FALSE)
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
@@ -147,7 +149,7 @@ ggplot(aes(x=reorder(main_category, -count), y=count),
        data = order_main_categories)+
   geom_bar(stat='identity') +
   ggtitle('Number of Projects by Main Categories') +
-  theme(axis.text.x=element_text(size=8, angle=90)) +
+  theme(axis.text.x=element_text(size=8)) +
   xlab('')
 ```
 
@@ -269,7 +271,7 @@ ggplot(aes(x=reorder(main.category, -avg.pledge.backer), y=avg.pledge.backer,
            fill=highlight), data=ks.avg_pledge) +
   geom_bar(stat='identity') +
   scale_fill_manual(values=c("grey35", "deepskyblue3")) +
-  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  theme(axis.text.x=element_text(size=8), legend.position="none") +
   xlab('') +
   ylab('Average Pledge per Backer (USD)') +
   ggtitle('Avg Pledge per Backer by Main Categories')
@@ -570,7 +572,7 @@ ggplot(aes(x = pledge_backer_grp, y = percentage, fill = state),
   xlab('Average Pledge per Backer (USD)') +
   ylab('')+
   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank()) +
-  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  theme(axis.text.x=element_text(size=8), legend.position="none") +
   geom_text(aes(label=paste0(round(percentage*100),"%")),
             position=position_stack(vjust=0.5), size=3)
 ```
@@ -646,7 +648,7 @@ ks_bi.ratio_counts <- ks_bi %>%
 ggplot(aes(x=reorder(main.category, -count), y=count), data=ks_bi.ratio_counts)+
   geom_bar(stat='identity') +
   ggtitle('Main Categories with the Most Projects with a Pledge Goal Ratio over 10') +
-  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  theme(axis.text.x=element_text(size=8), legend.position="none") +
   xlab('') +
   ylab('Number of Projects')
 ```
@@ -812,7 +814,7 @@ ggplot(aes(x = launched, y = percentage, color=main_category),
   geom_line(stat='identity') +
   geom_point(size=1, shape=21, fill="white") +
   facet_wrap(~main_category)+
-  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  theme(axis.text.x=element_text(size=8), legend.position="none") +
   scale_x_continuous(limits = c(2009, 2018)) +
   ggtitle('Success Rate Over Time by Main Category') +
   xlab('Year Launched') +
@@ -840,7 +842,7 @@ ggplot(aes(x=year(launched), fill = main_category),
        data=subset(ks_multi, (usd_goal_real > 1000) &
                      (pledge_goal_ratio >= 10))) +
   geom_bar(alpha=.6) +
-  theme(axis.text.x=element_text(size=8, angle=90), legend.position="none") +
+  theme(axis.text.x=element_text(size=8), legend.position="none") +
   facet_wrap(~main_category) +
   ggtitle('High Pledge/Goal Ratio Projects Over Time by Main Category') +
   xlab('Year Launched') +
